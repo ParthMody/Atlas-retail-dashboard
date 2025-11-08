@@ -1,0 +1,51 @@
+# ---- Python / Streamlit ----
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pkl
+*.log
+*.sqlite3
+*.db
+
+# ---- Virtual Environment ----
+venv/
+.env/
+.ass2/
+ass2/Lib/
+ass2/Include/
+ass2/Scripts/
+ass2/share/
+ass2/etc/
+ass2/pyvenv.cfg
+
+# ---- Data / Large Files ----
+data/*.parquet
+data/*.csv
+data/*.xlsx
+data/*.zip
+data/*.json
+data/*.sav
+data/*.pkl
+
+# ---- Cache / Temp ----
+.streamlit/
+.cache/
+.cache_data/
+.DS_Store
+Thumbs.db
+*.bak
+*.tmp
+
+# ---- Jupyter / HTML Outputs ----
+*.ipynb_checkpoints/
+*.nb.html
+*.html
+
+# ---- IDE / Editor ----
+.vscode/
+.idea/
+*.code-workspace
+
+# ---- OS Specific ----
+desktop.ini

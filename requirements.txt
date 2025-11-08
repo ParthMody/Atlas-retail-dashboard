@@ -1,0 +1,20 @@
+# --- Core ---
+streamlit==1.39.0
+pandas==2.2.2
+numpy==1.26.4
+
+# --- Visualisation ---
+plotly==5.23.0
+pyvis==0.3.2
+matplotlib==3.9.2
+
+# --- Data IO ---
+pyarrow==17.0.0
+duckdb==1.1.0
+
+# --- Utility ---
+requests==2.32.3
+Pillow==10.4.0
+
+# --- Compatibility ---
+typing-extensions==4.12.2
