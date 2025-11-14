@@ -180,6 +180,7 @@ if clean_tab == "Overview":
 elif clean_tab == "Basket Patterns":
     patterns.show()
 elif clean_tab == "Time Dynamics":
-    time.show()
+    time_tab.show()
 else:
     insights.show()
+
