@@ -1,2 +1,16 @@
 streamlit
+pandas
+numpy
+
 plotly
+pyvis
+matplotlib
+
+duckdb
+pyarrow
+networkx
+statsmodels
+
+requests
+Pillow
+typing-extensions
