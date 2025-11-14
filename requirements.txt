@@ -11,6 +11,8 @@ matplotlib==3.9.2
 # --- Data IO ---
 duckdb==1.1.0
 pyarrow  
+networkx
+statsmodels
 
 # --- Utility ---
 requests==2.32.3

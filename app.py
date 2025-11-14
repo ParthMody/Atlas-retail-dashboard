@@ -1,6 +1,12 @@
 import streamlit as st
 from pathlib import Path
-from tabs import overview, patterns, time_tab, insights
+
+try:
+    from tabs import overview, patterns, time_tab, insights
+except Exception as e:
+    st.set_page_config(page_title="Atlas – Retail Patterns Dashboard", layout="wide")
+    st.error(f"Import error in tabs: {e}")
+    st.stop()
 
 # ----------------- PAGE CONFIG -----------------
 st.set_page_config(
