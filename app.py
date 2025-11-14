@@ -1,19 +1,20 @@
 import streamlit as st
+import importlib
 from pathlib import Path
 
-try:
-    from tabs import overview, patterns, time_tab, insights
-except Exception as e:
-    st.set_page_config(page_title="Atlas – Retail Patterns Dashboard", layout="wide")
-    st.error(f"Import error in tabs: {e}")
-    st.stop()
-
-# ----------------- PAGE CONFIG -----------------
 st.set_page_config(
     page_title="Atlas – Retail Patterns Dashboard",
     page_icon="🛒",
     layout="wide",
 )
+
+# Hard check: is plotly installed in this environment?
+if importlib.util.find_spec("plotly") is None:
+    st.error("plotly is NOT installed in this Streamlit Cloud environment. "
+             "Cloud is not picking up your requirements.txt.")
+    st.stop()
+
+from tabs import overview, patterns, time_tab, insights
 
 # ----------------- GLOBAL STYLES -----------------
 st.markdown(
