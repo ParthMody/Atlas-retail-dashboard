@@ -1,6 +1,6 @@
 import streamlit as st
 from pathlib import Path
-from tabs import overview, patterns, time, insights
+from tabs import overview, patterns, time_tab, insights
 
 # ----------------- PAGE CONFIG -----------------
 st.set_page_config(
