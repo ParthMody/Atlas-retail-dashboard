@@ -42,7 +42,7 @@ Each card follows the same structure:
 - **What we see** – one-line summary of the pattern.  
 - **Why it matters** – commercial / operational impact.  
 - **Action** – short imperative step.  
-- **Evidence** – support · confidence · lift (+ ABS stat if used).  
+- **Evidence** – support · confidence · lift
 - **Confidence** – High / Medium, based on lift and stability.
 """
             )
