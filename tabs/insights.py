@@ -16,7 +16,6 @@ PALETTE = {
     "ink": "#0F172A",
 }
 
-# Keep this in sync with patterns.py
 SEGMENT_MAP_DEFAULT = {
     1: "Lost Customers",
     2: "High-value Customers",
@@ -26,9 +25,7 @@ SEGMENT_MAP_DEFAULT = {
 
 # ---------- small helpers / layout ----------
 
-
 def insights_helpbar():
-    """Top helper strip – three wide popover buttons."""
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -48,11 +45,11 @@ def insights_helpbar():
                 """
 Each card follows the same structure:
 
-- **What we see** – one-line summary of the pattern.  
-- **Why it matters** – commercial / operational impact.  
-- **Action** – short, imperative step.  
-- **Evidence** – support · confidence · lift (plus ABS stats where relevant).  
-- **Confidence** – High / Medium, based on lift and how common the pattern is.
+- **What we see** – one-line summary.  
+- **Why it matters** – commercial logic.  
+- **Action** – imperative step.  
+- **Evidence** – support · confidence · lift + ABS where relevant.  
+- **Confidence** – High / Medium.
 """
             )
 
@@ -60,10 +57,10 @@ Each card follows the same structure:
         with st.popover("🛡️ Limits & guardrails", use_container_width=True):
             st.markdown(
                 """
-- Rules are from **UCI Online Retail II (UK)**, based on older UK e-commerce data.  
-- ABS is **Australian macro context** (recent years), not the same time period as the rules.  
-- Avoid acting on **tiny-support spikes**, even if lift looks high.  
-- Use this tab to **inform** decisions and experiments, not to auto-allocate budget.
+- Rules come from **UCI Online Retail II (UK)**.  
+- ABS is **Australian macro context**, different time period.  
+- Avoid tiny-support spikes.  
+- Use this tab to **inform**, not automate decisions.
 """
             )
 
@@ -122,36 +119,22 @@ def _insight_card(title, what, why, action, evidence, confidence, icon="🧩"):
 
 # ---------- data cleaners ----------
 
-
 def clean_product_name(x: str) -> str:
     if not isinstance(x, str):
         return x
-
-    # strip IDs like "85123A | " at the front
     x = re.sub(r"^\s*[A-Za-z0-9]+\s*\|\s*", "", x)
-    # strip leading numeric codes like "22423 "
     x = re.sub(r"^\s*\d+\s+", "", x)
-    # kill stray markdown asterisks from original strings
     x = x.replace("*", "")
-    # collapse whitespace
     x = re.sub(r"\s{2,}", " ", x).strip()
     return x
 
-
 def pretty_item_name(x: str) -> str:
-    """
-    Make ALL-CAPS item names nicer (Title Case), but leave already
-    mixed/sentence-case names as they are.
-    """
     if not isinstance(x, str):
         return x
     s = x.strip()
-    # if it already has any lowercase letters, respect the original casing
     if any(ch.islower() for ch in s):
         return s
-    # otherwise convert from SHOUTING to Title Case
     return s.title()
-
 
 def _detect_abs_cols(csv_path: Path):
     hdr = pd.read_csv(csv_path, nrows=0)
@@ -165,27 +148,17 @@ def _detect_abs_cols(csv_path: Path):
 
     region = pick("region", "state", "state/territory", "geography", "geog")
     date = pick("time_period", "time period", "period", "month", "date")
-    value = pick("obs_value", "observation value",
-                 "value", "turnover", "amount")
+    value = pick("obs_value", "observation value", "value", "turnover", "amount")
     industry = pick("industry", "industry_code", "category", "group")
     return region, date, value, industry
 
-
 @st.cache_data(show_spinner=False)
 def load_abs(path: Path, keep_years: int = 5):
-    """
-    Load ABS 8501.0 and return a clean, aggregated series in $M:
-    - Filters to Measure = Current prices
-    - Prefers Adjustment Type = Seasonally adjusted (if present)
-    - Applies UNIT_MULT and rescales to millions of dollars
-    - Aggregates duplicates by region × date (× industry)
-    """
     if not path.exists():
         return pd.DataFrame(), {}
 
     region_col, date_col, value_col, industry_col = _detect_abs_cols(path)
 
-    # Second pass over header to find Measure / Adjustment Type
     hdr = pd.read_csv(path, nrows=0)
     cols_norm = {c.strip().lower(): c for c in hdr.columns}
 
@@ -222,7 +195,6 @@ def load_abs(path: Path, keep_years: int = 5):
 
     df = pd.read_csv(path, usecols=need, low_memory=False)
 
-    # Filter to a single, meaningful level series
     if measure_col and measure_col in df.columns:
         df[measure_col] = df[measure_col].astype(str).str.strip().str.lower()
         df = df[df[measure_col] == "current prices"]
@@ -233,7 +205,6 @@ def load_abs(path: Path, keep_years: int = 5):
         if mask_sa.any():
             df = df[mask_sa]
 
-    # Rename to internal names
     ren = {region_col: "region", date_col: "date", value_col: "turnover"}
     if industry_col:
         ren[industry_col] = "industry"
@@ -243,21 +214,16 @@ def load_abs(path: Path, keep_years: int = 5):
         ren[adj_col] = "adj_type"
     df = df.rename(columns=ren)
 
-    # Numeric + unit scaling
     df["turnover"] = pd.to_numeric(df["turnover"], errors="coerce")
     if "UNIT_MULT" in df.columns:
         with pd.option_context("mode.chained_assignment", None):
-            df["UNIT_MULT"] = pd.to_numeric(
-                df["UNIT_MULT"], errors="coerce"
-            ).fillna(0)
+            df["UNIT_MULT"] = pd.to_numeric(df["UNIT_MULT"], errors="coerce").fillna(0)
             df["turnover"] = df["turnover"] * (10 ** df["UNIT_MULT"])
         df = df.drop(columns=["UNIT_MULT"])
 
-    # If region missing for some reason, default to Australia
     if "region" not in df.columns:
         df["region"] = "Australia"
 
-    # Dates → month start
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
     df = df.dropna(subset=["date", "turnover"])
 
@@ -265,20 +231,15 @@ def load_abs(path: Path, keep_years: int = 5):
     df["date"] = df["month"]
     df = df.drop(columns=["month"])
 
-    # Keep latest N years for readability
     cut = df["date"].max() - pd.DateOffset(years=keep_years)
     df = df[df["date"] >= cut]
 
-    # Aggregate duplicates
-    keys = ["region", "date"] + \
-        (["industry"] if "industry" in df.columns else [])
+    keys = ["region", "date"] + (["industry"] if "industry" in df.columns else [])
     df = df.groupby(keys, as_index=False)["turnover"].sum()
 
-    # Convert to $M
     if df["turnover"].max() > 1e6:
         df["turnover"] = df["turnover"] / 1e6
 
-    # Drop helper columns if present
     for col in ["measure", "adj_type"]:
         if col in df.columns:
             df = df.drop(columns=[col])
@@ -297,12 +258,10 @@ def _detect_segment_col(df: pd.DataFrame):
             return c
     return None
 
-
 @st.cache_data(show_spinner=False)
 def load_rules(path: Path):
     if not path.exists():
         return pd.DataFrame()
-
     df = pd.read_csv(path, low_memory=False)
     df.columns = df.columns.str.strip().str.lower()
 
@@ -324,132 +283,69 @@ def load_rules(path: Path):
 
     df = df[keep].dropna()
     for c in ["support", "confidence", "lift"]:
-        if c in df.columns:
-            df[c] = pd.to_numeric(df[c], errors="coerce")
+        df[c] = pd.to_numeric(df[c], errors="coerce")
 
     for c in ["antecedent", "consequent"]:
-        if c in df.columns:
-            df[c] = (
-                df[c]
-                .astype(str)
-                .str.replace(r"[\{\}\[\]\(\)\"']", "", regex=True)
-                .apply(clean_product_name)
-            )
+        df[c] = (
+            df[c]
+            .astype(str)
+            .str.replace(r"[\{\}\[\]\(\)\"']", "", regex=True)
+            .apply(clean_product_name)
+        )
 
     df = df.dropna(subset=["support", "confidence", "lift"])
     return df
 
-# ---------- ABS helpers (national series) ----------
-
-
-def _national_total_series(abs_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Return monthly national turnover in $M, matching the logic used in other tabs.
-    Prefer region == 'Australia' if present; otherwise sum across regions.
-    If industry has a 'Total' row, keep only that.
-    """
-    if abs_df.empty:
-        return abs_df.copy()
-
-    df2 = abs_df.copy()
-
-    # Prefer Australia region if available
-    if "region" in df2.columns:
-        mask_aus = df2["region"].astype(str).str.lower() == "australia"
-        if mask_aus.any():
-            df2 = df2[mask_aus]
-
-    # Prefer industry Total if available
-    if "industry" in df2.columns:
-        mask_total = df2["industry"].astype(str).str.lower() == "total"
-        if mask_total.any():
-            df2 = df2[mask_total]
-
-    monthly = (
-        df2.groupby("date", as_index=False)["turnover"]
-        .sum()
-        .sort_values("date")
-    )
-    return monthly
-
+# ---------- ABS helpers ----------
 
 def _national_total(abs_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Return a clean national total series in $M by month.
-
-    - Prefer Region = Australia / AUS if present
-    - Prefer Industry = Total if present
-    - Otherwise sum across industries
-    """
     if abs_df.empty:
         return pd.DataFrame(columns=["date", "turnover"])
-
     df2 = abs_df.copy()
 
-    # Focus on national scope if we have a Region column
     if "region" in df2.columns:
         df2["region"] = df2["region"].astype(str)
         mask_nat = df2["region"].str.lower().isin(["australia", "aus"])
         if mask_nat.any():
             df2 = df2[mask_nat]
 
-    # If we have an industry split, prefer the rolled-up Total series
     if "industry" in df2.columns:
         df2["industry"] = df2["industry"].astype(str)
         mask_total = df2["industry"].str.lower() == "total"
         if mask_total.any():
             df2 = df2[mask_total]
         else:
-            # otherwise, sum across industries
             df2 = df2.groupby("date", as_index=False)["turnover"].sum()
             return df2[["date", "turnover"]].sort_values("date")
 
-    # Final aggregation by date
-    monthly = (
-        df2.groupby("date", as_index=False)["turnover"]
-        .sum()
-        .sort_values("date")
-    )
+    monthly = df2.groupby("date", as_index=False)["turnover"].sum().sort_values("date")
     return monthly[["date", "turnover"]]
 
-
 def _latest_yoy(abs_df: pd.DataFrame) -> float:
-    """YoY % change on the clean national total series."""
     monthly = _national_total(abs_df)
     if monthly.empty or len(monthly) < 13:
         return 0.0
-
     latest = float(monthly.iloc[-1]["turnover"])
     prev = float(monthly.iloc[-13]["turnover"])
     if prev == 0:
         return 0.0
     return (latest - prev) / prev * 100.0
 
-
 def _top_industry(abs_df: pd.DataFrame) -> str:
-    """Top ABS industry over the last 12 months, excluding 'Total'.
-
-    Prefers the Australia region if present. Falls back to '—' if no split.
-    """
     if abs_df.empty or "industry" not in abs_df.columns:
         return "—"
-
     df2 = abs_df.copy()
     if "region" in df2.columns:
         mask_aus = df2["region"].astype(str).str.lower() == "australia"
         if mask_aus.any():
             df2 = df2[mask_aus]
-
     last12_cut = df2["date"].max() - pd.DateOffset(months=12)
     last12 = df2[df2["date"] >= last12_cut].copy()
-
     last12 = last12.dropna(subset=["industry"])
     last12["industry"] = last12["industry"].astype(str)
     last12 = last12[last12["industry"].str.lower() != "total"]
-
     if last12.empty:
         return "—"
-
     g = (
         last12.groupby("industry", as_index=False)["turnover"]
         .sum()
@@ -457,32 +353,23 @@ def _top_industry(abs_df: pd.DataFrame) -> str:
     )
     return str(g.iloc[0]["industry"])
 
-
 def _december_uplift(abs_df: pd.DataFrame) -> float:
-    """December uplift vs average month on the national total series."""
     monthly = _national_total(abs_df)
     if monthly.empty:
         return 0.0
-
     monthly = monthly.sort_values("date")
     monthly["month"] = monthly["date"].dt.month
-
-    # last 24 months only
-    last24 = monthly[monthly["date"] >=
-                     monthly["date"].max() - pd.DateOffset(months=24)]
+    last24 = monthly[monthly["date"] >= monthly["date"].max() - pd.DateOffset(months=24)]
     if last24.empty:
         return 0.0
-
     by_month = last24.groupby("month", as_index=False)["turnover"].mean()
     mean_all = float(by_month["turnover"].mean())
     dec = by_month.loc[by_month["month"] == 12, "turnover"]
     if dec.empty or mean_all == 0:
         return 0.0
-
     return (float(dec.iloc[0]) / mean_all - 1.0) * 100.0
 
-
-# ---------- rule selection helpers ----------
+# ---------- rule selection ----------
 
 def _pick_top_rule(df: pd.DataFrame):
     if df.empty:
@@ -491,7 +378,6 @@ def _pick_top_rule(df: pd.DataFrame):
         ["support", "confidence", "lift"],
         ascending=[False, False, False]
     ).iloc[0]
-
 
 def _pick_lapsing_rule(df: pd.DataFrame, seg_col: str):
     if seg_col is None or seg_col not in df.columns or df.empty:
@@ -504,7 +390,6 @@ def _pick_lapsing_rule(df: pd.DataFrame, seg_col: str):
     if sub.empty:
         return None, lapsing_value
     return _pick_top_rule(sub), lapsing_value
-
 
 # ---------- main tab ----------
 
@@ -521,12 +406,10 @@ def show():
 
     seg_col = _detect_segment_col(rules_df)
 
-    # ----- focus filters -----
     left_filters, right_mode = st.columns([2, 1])
 
     with left_filters:
-        # segment display mapping
-        seg_label_map: dict = {}
+        seg_label_map = {}
         seg_focus_label = "All customers"
         seg_focus_value = None
         if seg_col:
@@ -549,7 +432,6 @@ def show():
             options = ["All customers"] + [seg_label_map[v] for v in seg_vals]
             seg_focus_label = st.selectbox("Focus segment", options, index=0)
             if seg_focus_label != "All customers":
-                # inverse lookup
                 for raw, lab in seg_label_map.items():
                     if lab == seg_focus_label:
                         seg_focus_value = raw
@@ -575,7 +457,6 @@ def show():
             index=0,
         )
 
-    # apply filters
     focus = rules_df.copy()
     if seg_focus_value is not None and seg_col:
         focus = focus[focus[seg_col] == seg_focus_value]
@@ -586,7 +467,6 @@ def show():
         st.warning("No rules for this combination of segment and industry.")
         return
 
-    # KPIs
     n_rules = int(len(focus))
     avg_lift = float(focus["lift"].mean())
     yoy = _latest_yoy(abs_df)
@@ -602,9 +482,8 @@ def show():
     k1.metric("Rules in focus", f"{n_rules:,}")
     k2.metric("Average lift", f"{avg_lift:.2f}")
     k3.metric("Top ABS category", top_cat)
-    k4.metric("YoY turnover (ABS)", f"{yoy:+.1f}%" if abs_df.size else "—")
+    k4.metric("YoY turnover (ABS)", f"{yoy:+.1f}%")
 
-    # ABS sparkline (macro anchor)
     if not abs_df.empty:
         monthly_total = _national_total(abs_df)
         fig = px.line(
@@ -621,18 +500,31 @@ def show():
 
     dec_uplift = _december_uplift(abs_df)
 
-    # pick rules
+    # ------- pick rules -------
     bread_rule = _pick_top_rule(focus)
     lapsing_rule, lapsing_value = _pick_lapsing_rule(focus, seg_col)
 
-    # text labels for segment / industry context
+    # ------- duplicate rule suppression (this is the ONLY change) -------
+    if bread_rule is not None and lapsing_rule is not None:
+        same_pair = (
+            str(bread_rule["antecedent"]) == str(lapsing_rule["antecedent"])
+            and str(bread_rule["consequent"]) == str(lapsing_rule["consequent"])
+        )
+        same_metrics = (
+            float(bread_rule["support"]) == float(lapsing_rule["support"])
+            and float(bread_rule["confidence"]) == float(lapsing_rule["confidence"])
+            and float(bread_rule["lift"]) == float(lapsing_rule["lift"])
+        )
+        if same_pair and same_metrics:
+            lapsing_rule = None
+    # --------------------------------------------------------------------
+
     seg_context = seg_focus_label
     ind_context = ind_focus_label
 
-    # -------- store vs analytics text --------
+    # -------- store vs analytics --------
 
     if mode == "Store-ready view":
-        # bread-and-butter combo
         if bread_rule is not None:
             a = pretty_item_name(bread_rule["antecedent"])
             c = pretty_item_name(bread_rule["consequent"])
@@ -650,7 +542,6 @@ def show():
                 icon="🧱",
             )
 
-        # lapsing customers
         if lapsing_rule is not None:
             a = pretty_item_name(lapsing_rule["antecedent"])
             c = pretty_item_name(lapsing_rule["consequent"])
@@ -673,7 +564,7 @@ def show():
                 icon="🩹",
             )
 
-    else:  # Analytics view
+    else:
         if bread_rule is not None:
             a = pretty_item_name(bread_rule["antecedent"])
             c = pretty_item_name(bread_rule["consequent"])
@@ -692,8 +583,7 @@ def show():
                     f"Rule from filtered UK baskets; focus={seg_context}, {ind_context}. "
                     f"ABS YoY turnover={yoy:+.1f}%, December uplift≈{dec_uplift:+.1f}%."
                 ),
-                confidence="High" if (
-                    lift >= 2.0 and sup >= 0.01) else "Medium",
+                confidence="High" if (lift >= 2.0 and sup >= 0.01) else "Medium",
                 icon="📊",
             )
 
@@ -714,7 +604,7 @@ def show():
                     f"Within {seg_label}, the strongest rule has "
                     f"support={sup:.3f}, confidence={conf:.2f}, lift={lift:.2f}."
                 ),
-                why="This shows what remaining spend from at-risk shoppers looks like.",
+                why="Shows what remaining spend from at-risk shoppers looks like.",
                 action="Use as a seed for targeted retention.",
                 evidence=f"Segment column={seg_col or 'n/a'}; lapsing code={lapsing_value}.",
                 confidence="Medium",
